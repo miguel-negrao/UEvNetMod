@@ -22,7 +22,9 @@ UEvNetMod {
     init { }
     start {}
     stop {}
-    dispose {}
+    dispose {
+		eventNetwork.pauseNow;
+	}
     prepare {}
 
     storeArgs {
@@ -75,7 +77,7 @@ UEvNetTMod : UEvNetMod {
         ^super.newCopyArgs(def)
     }
 
-    asUMod { |unit|
+    asUModFor { |unit|
         var tESM;
         timer = ENTimer(desc.delta);
         tESM = timer.asENInput;
@@ -84,9 +86,9 @@ UEvNetTMod : UEvNetMod {
         eventNetwork.actuateNow;
     }
 
-    start {
-        tES.fire(0);
-        timer.start.unsafePerformIO;
+    start { |unit, startPos|
+		tES.fire(startPos ? 0);
+		timer.start(startPos).unsafePerformIO;
     }
 
     stop {
@@ -105,6 +107,20 @@ UEvNetTMod : UEvNetMod {
         timer.resume.unsafePerformIO;
     }
 
+	*test { |desc, startTime = 0|
+		var tESM, eventNetwork, timer, tES;
+        timer = ENTimer(desc.delta);
+        tESM = timer.asENInput;
+        eventNetwork = EventNetwork(
+			tESM >>= { |tEventSource|
+				var tSignal = tEventSource.hold(0.0);
+				desc.descFunc.(tSignal)
+        } );
+        eventNetwork.actuateNow;
+		timer.start(startTime).unsafePerformIO;
+		^eventNetwork
+    }
+
 }
 
 UEvNetTModDef : UEvNetModDef {
@@ -114,8 +130,22 @@ UEvNetTModDef : UEvNetModDef {
         ^super.newCopyArgs(descFunc, delta)
     }
 
-    asUMod { |unit|
-        ^UEvNetTMod(this).asUMod(unit, delta)
+	test{ |startTime = 0|
+		var tESM, eventNetwork, timer;
+        timer = ENTimer(delta);
+        tESM = timer.asENInput;
+        eventNetwork = EventNetwork(
+			tESM >>= { |tEventSource|
+				var tSignal = tEventSource.hold(0.0);
+				descFunc.(tSignal)
+        } );
+        eventNetwork.actuateNow;
+		timer.start(startTime).unsafePerformIO;
+		^eventNetwork
+	}
+
+    asUModFor { |unit|
+        ^UEvNetTMod(this).asUModFor(unit, delta)
     }
 
     createDesc { |unit, tESM|
@@ -147,6 +177,7 @@ UEvNetTModDef : UEvNetModDef {
     }
 }
 
+//language side automation
 UAutMod : UEvNetTMod {
 	var <timeValuesDict;
     /*
@@ -179,4 +210,29 @@ UAutMod : UEvNetTMod {
         ^[timeValuesDict, desc.delta]
     }
 
+}
+
+/*
+UENMods
+
+Allow using an imperative interface to the EventNetwork monad.
+
+*/
+UENModDef : UEvNetModDef {
+
+	 createDesc { |unit|
+		^ENDef.evaluate( descFunc ) >>= this.addReactimatesFunc(unit)
+    }
+
+}
+
+UENTModDef : UEvNetTModDef {
+
+    createDesc { |unit, tESM|
+        ^tESM >>= { |tEventSource|
+            var tSignal = tEventSource.hold(0.0);
+			ENDef.evaluate( descFunc, [tSignal] )
+            >>= this.addReactimatesFunc(unit, tEventSource)
+        }
+    }
 }
