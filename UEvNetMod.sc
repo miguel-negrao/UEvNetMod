@@ -46,10 +46,16 @@ UEvNetModDef {
 
     addReactimatesFunc { |unit|
         ^{ |dict|
+			Object.checkArgs(UEvNetModDef, "addReactimatesFunc - anonymous function", [dict], [Dictionary]);
             if( dict.isEmpty ) {
                 EventNetwork.returnUnit
             } {
+				var unitKeys = unit.def.argSpecs.collect(_.name);
                 dict.collect{ |uarg, key|
+					Object.checkArgs(UEvNetModDef, \addReactimatesFunc, [uarg,key], [UModArg, Symbol]);
+					if( unitKeys.includes(key).not ) {
+						"WARNING: unit % doesn't have key %".format(unit.name, key).postln;
+					};
                     uarg.match({ |sig|
                         sig.collect{ |v| IO{ unit.mapSet(key, v) } }.reactimate
                         },{ |sig|
