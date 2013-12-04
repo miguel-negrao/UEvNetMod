@@ -22,9 +22,9 @@ UEvNetMod {
     init { }
     start {}
     stop {}
-    dispose {
-		eventNetwork.pauseNow;
-	}
+	//dispose happens when synths are freed.
+	//we don't want to free event network at that point
+    dispose {}
     prepare {}
 
     storeArgs {
