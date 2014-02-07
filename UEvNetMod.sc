@@ -19,6 +19,8 @@ UEvNetMod {
         eventNetwork.actuateNow;
     }
 
+	viewNumLines{ ^0 }
+
     init { }
     start {}
     stop {}
