@@ -7,7 +7,7 @@ UEvNetMod {
     }
 
     connect {
-        eventNetwork.actuateNow;
+        eventNetwork.start;
     }
 
     disconnect {
@@ -16,7 +16,7 @@ UEvNetMod {
 
     asUModFor { |unit|
         eventNetwork = EventNetwork( desc.createDesc(unit) );
-        eventNetwork.actuateNow;
+        eventNetwork.start;
     }
 
 	viewNumLines{ ^0 }
@@ -80,6 +80,7 @@ UEvNetModDef {
 
 UEvNetTMod : UEvNetMod {
     var <timer, <tES;
+	var <playing  = false;
 
     *new { |def|
         ^super.newCopyArgs(def)
@@ -91,28 +92,38 @@ UEvNetTMod : UEvNetMod {
         tESM = timer.asENInput;
         tES = tESM.a;
         eventNetwork = EventNetwork( desc.createDesc(unit, tESM) );
-        eventNetwork.actuateNow;
+        eventNetwork.start;
     }
 
     start { |unit, startPos|
 		tES.fire(startPos ? 0);
 		timer.start(startPos).unsafePerformIO;
+		playing = true;
     }
 
     stop {
         timer.stop.unsafePerformIO;
+		playing = false;
     }
 
     dispose {
-       timer.stop.unsafePerformIO;
+       this.stop;
+		eventNetwork.free
+    }
+
+	disconnect {
+       this.stop;
+		eventNetwork.free
     }
 
     pause {
         timer.pause.unsafePerformIO;
+		playing = false;
     }
 
     resume {
         timer.resume.unsafePerformIO;
+		playing = true;
     }
 
 	*test { |desc, startTime = 0|
@@ -124,7 +135,7 @@ UEvNetTMod : UEvNetMod {
 				var tSignal = tEventSource.hold(0.0);
 				desc.descFunc.(tSignal)
         } );
-        eventNetwork.actuateNow;
+        eventNetwork.start;
 		timer.start(startTime).unsafePerformIO;
 		^eventNetwork
     }
@@ -147,7 +158,7 @@ UEvNetTModDef : UEvNetModDef {
 				var tSignal = tEventSource.hold(0.0);
 				descFunc.(tSignal)
         } );
-        eventNetwork.actuateNow;
+        eventNetwork.start;
 		timer.start(startTime).unsafePerformIO;
 		^eventNetwork
 	}
