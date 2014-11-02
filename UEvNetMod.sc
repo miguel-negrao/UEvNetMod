@@ -1,9 +1,16 @@
 UEvNetMod {
-    var <desc;
+    var <defName;
+	//private
+	var <def;
     var <eventNetwork;
 
-    *new { |desc|
-        ^super.newCopyArgs(desc)
+    *new { |defName|
+		var def = UEvNetModDef.all[defName];
+		if(def.notNil) {
+			^super.newCopyArgs(defName, def)
+		}{
+			Error("No UEvNetModDef with name %".format(defName)).throw
+		}
     }
 
     connect {
@@ -15,7 +22,7 @@ UEvNetMod {
     }
 
     asUModFor { |unit|
-        eventNetwork = EventNetwork( desc.createDesc(unit) );
+        eventNetwork = EventNetwork( def.createDesc(unit) );
         eventNetwork.start;
     }
 
@@ -30,20 +37,29 @@ UEvNetMod {
     prepare {}
 
     storeArgs {
-        ^[desc]
+        ^[defName]
     }
 }
 
 UEvNetModDef {
+	classvar <>all;
     //public
-    var <descFunc;
+    var <name, <descFunc;
 
-    *new { |descFunc|
-        ^super.newCopyArgs( descFunc )
+    *new { |name, descFunc|
+        var x = super.newCopyArgs( name, descFunc );
+		x.addToAll;
+		^x
     }
 
+	addToAll {
+		UEvNetModDef.all ?? { UEvNetModDef.all = IdentityDictionary() };
+		UEvNetModDef.all[ name.asSymbol ] = this;
+		UEvNetModDef.all.changed( \added, this );
+	}
+
     asUModFor { |unit|
-        ^UEvNetMod(this).asUModFor(unit)
+        ^UEvNetMod(name).asUModFor(unit)
     }
 
     addReactimatesFunc { |unit|
@@ -73,7 +89,7 @@ UEvNetModDef {
     }
 
     storeArgs {
-        ^[descFunc]
+        ^[name, descFunc]
     }
 
 }
@@ -82,16 +98,12 @@ UEvNetTMod : UEvNetMod {
     var <timer, <tES;
 	var <playing  = false;
 
-    *new { |def|
-        ^super.newCopyArgs(def)
-    }
-
     asUModFor { |unit|
         var tESM;
-        timer = ENTimer(desc.delta);
+        timer = ENTimer(def.delta);
         tESM = timer.asENInput;
         tES = tESM.a;
-        eventNetwork = EventNetwork( desc.createDesc(unit, tESM) );
+        eventNetwork = EventNetwork( def.createDesc(unit, tESM) );
         eventNetwork.start;
     }
 
@@ -126,14 +138,14 @@ UEvNetTMod : UEvNetMod {
 		playing = true;
     }
 
-	*test { |desc, startTime = 0|
+	*test { |def, startTime = 0|
 		var tESM, eventNetwork, timer, tES;
-        timer = ENTimer(desc.delta);
+        timer = ENTimer(def.delta);
         tESM = timer.asENInput;
         eventNetwork = EventNetwork(
 			tESM >>= { |tEventSource|
 				var tSignal = tEventSource.hold(0.0);
-				desc.descFunc.(tSignal)
+				def.descFunc.(tSignal)
         } );
         eventNetwork.start;
 		timer.start(startTime).unsafePerformIO;
@@ -145,8 +157,10 @@ UEvNetTMod : UEvNetMod {
 UEvNetTModDef : UEvNetModDef {
     var <delta = 0.1;
 
-    *new { |descFunc, delta = 0.1|
-        ^super.newCopyArgs(descFunc, delta)
+    *new { |defName, descFunc, delta = 0.1|
+        var x = super.newCopyArgs(defName, descFunc, delta);
+		x.addToAll;
+		^x
     }
 
 	test{ |startTime = 0|
@@ -197,6 +211,7 @@ UEvNetTModDef : UEvNetModDef {
 }
 
 //language side automation
+/*
 UAutMod : UEvNetTMod {
 	var <timeValuesDict;
     /*
@@ -226,11 +241,11 @@ UAutMod : UEvNetTMod {
 	}
 
 	storeArgs {
-        ^[timeValuesDict, desc.delta]
+        ^[timeValuesDict, def.delta]
     }
 
 }
-
+*/
 /*
 UENMods
 
