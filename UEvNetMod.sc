@@ -118,14 +118,9 @@ UEvNetTMod : UEvNetMod {
 		playing = false;
     }
 
-    dispose {
-       this.stop;
-		eventNetwork.free
-    }
-
 	disconnect {
        this.stop;
-		eventNetwork.free
+		eventNetwork.stop
     }
 
     pause {
