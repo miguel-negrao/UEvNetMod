@@ -5,15 +5,29 @@ UEvNetMod {
 	var <def;
     var <eventNetwork;
 	var <>keySignalDict;
+	var sliderValues;
+	var <sliderProxys;
 
-    *new { |defName|
+    *new { |defName, sliderValues|
 		var def = UEvNetModDef.all[defName];
+		var temp = sliderValues.asArray.clump(2).collect{ |xs| xs[0].asSymbol -> xs[1] }.asIdentDictFromAssocs;
+		var sliderValues2 = def.sliderSpecs.clump(2).collect{ |xs|
+			var key = xs[0];
+			var x = temp.at(key);
+			if( x.isNil) { xs[1].default}{ x }
+		};
 		if(def.notNil) {
-			^super.newCopyArgs(defName, def)
+			^super.new.initUEvNetMod(defName, def, sliderValues2)
 		}{
 			Error("No UEvNetModDef with name %".format(defName)).throw
 		}
     }
+
+	initUEvNetMod { |adefName, adef, asliderValues|
+		defName = adefName;
+		def = adef;
+		sliderValues = asliderValues;
+	}
 
     connect {
         eventNetwork.start;
@@ -24,12 +38,13 @@ UEvNetMod {
     }
 
     asUModFor { |unit|
-        eventNetwork = EventNetwork( def.createDesc(unit) );
+		sliderProxys = sliderValues.collect{ |v|  FRPGUIProxy(nil, v) };
+		eventNetwork = EventNetwork( def.createDesc(unit, sliderProxys.collect(_.asENInput) ) );
         eventNetwork.start;
 		keySignalDict = UEvNetMod.globalkeySignalDict;
     }
 
-	viewNumLines{ ^0 }
+	viewNumLines{ ^sliderValues.size+1 }
 
     init { }
     start {}
@@ -39,31 +54,76 @@ UEvNetMod {
     dispose {}
     prepare {}
 
-    storeArgs {
-        ^[defName]
+	sliderValues {
+		^if(sliderProxys.isNil){
+			sliderValues
+		} {
+			sliderProxys.collect( _.value )
+		}
+	}
+
+	sliderValuesKeyPairs {
+		^[this.def.sliderKeys, this.sliderValues].flop.flatten
+	}
+
+	storeArgs {
+		^if(this.def.sliderSpecs.size == 0) {
+			[defName]
+		} {
+			[defName, this.sliderValuesKeyPairs]
+		}
     }
+
+	makeView { |parent, bounds|
+		var viewHeight = 14;
+		StaticText(parent, bounds.width@viewHeight)
+		.applySkin( RoundView.skin )
+		.string_("mod : "++this.defName);
+		if( def.sliderSpecs.size > 0) {
+			var specspairs = def.sliderSpecs.clump(2).flop;
+			var labels = specspairs[0];
+			var specs = specspairs[1];
+
+			[this.sliderValues, specs, labels, sliderProxys].flopWith{ |v, spec, label, proxy|
+				var bounds2 = (bounds.width @ ((spec.viewNumLines * viewHeight) + ((spec.viewNumLines-1) * 4)));
+				var composite = CompositeView( parent, bounds2 )
+				.resize_(2)
+				.background_(Color.grey(0.7));
+				var viewDict = spec.makeView( composite, bounds2, "*"++label,
+					{ |vw, value| }, 5
+				);
+				viewDict[ \valueView ].value = v;
+				proxy.view_(viewDict[ \valueView ])
+			}
+		}
+	}
+
 }
 
 UEvNetModDef {
 	classvar <>all;
     //public
     var <name, <descFunc;
+	var <sliderSpecs;
 
-    *new { |name, descFunc|
-        var x = super.newCopyArgs( name, descFunc );
-		x.addToAll;
-		^x
+    *new { |name, descFunc, sliderSpecs=#[]|
+		var check1 = if(sliderSpecs.size.odd){ Error("ImmDef - sliderSpecs: array size must be even").throw };
+        var res = super.new.initUEvNetModDef( name, descFunc, sliderSpecs );
+		res.addToAll;
+		^res
     }
+
+	initUEvNetModDef { | aname, adescFunc, asliderSpecs |
+		name = aname;
+		descFunc = adescFunc;
+		sliderSpecs = asliderSpecs.clump(2).collect{ |xs| [xs[0].asSymbol, xs[1].asControlSpec] }.flatten;
+	}
 
 	addToAll {
 		UEvNetModDef.all ?? { UEvNetModDef.all = IdentityDictionary() };
 		UEvNetModDef.all[ name.asSymbol ] = this;
 		UEvNetModDef.all.changed( \added, this );
 	}
-
-    asUModFor { |unit|
-        ^UEvNetMod(name).asUModFor(unit)
-    }
 
     addReactimatesFunc { |unit|
         ^{ |dict|
@@ -89,12 +149,18 @@ UEvNetModDef {
         }
     }
 
-    createDesc { |unit|
-        ^descFunc.() >>= this.addReactimatesFunc(unit)
+    createDesc { |unit, slidersM|
+		^slidersM.sequence(EventNetwork) >>= { |sliderSigs|
+			descFunc.(*sliderSigs) >>= this.addReactimatesFunc(unit)
+		}
     }
 
+	sliderKeys {
+		^sliderSpecs.clump(2).flop[0]
+	}
+
     storeArgs {
-        ^[name, descFunc]
+		^[name, descFunc] ++ if(sliderSpecs.empty){}{[sliderSpecs]}
     }
 
 }
@@ -108,7 +174,8 @@ UEvNetTMod : UEvNetMod {
         timer = ENTimer(def.delta);
         tESM = timer.asENInput;
         tES = tESM.a;
-        eventNetwork = EventNetwork( def.createDesc(unit, tESM) );
+		sliderProxys = sliderValues.collect{ |v|  FRPGUIProxy(nil, v) };
+        eventNetwork = EventNetwork( def.createDesc(unit, tESM, sliderProxys.collect(_.asENInput)) );
         eventNetwork.start;
 		keySignalDict = UEvNetMod.globalkeySignalDict;
     }
@@ -158,12 +225,18 @@ UEvNetTMod : UEvNetMod {
 UEvNetTModDef : UEvNetModDef {
     var <delta = 0.1;
 
-    *new { |defName, descFunc, delta = 0.1|
-        var x = super.newCopyArgs(defName, descFunc, delta);
+	*new { |defName, descFunc, delta = 0.1, sliderSpecs=#[]|
+		var x = super.new(defName, descFunc, sliderSpecs).initUEvNetTModDef(delta);
 		x.addToAll;
 		^x
     }
 
+	initUEvNetTModDef { |adelta|
+		delta = adelta
+	}
+
+	/*
+	untested
 	test{ |startTime = 0|
 		var tESM, eventNetwork, timer;
         timer = ENTimer(delta);
@@ -177,16 +250,18 @@ UEvNetTModDef : UEvNetModDef {
 		timer.start(startTime).unsafePerformIO;
 		^eventNetwork
 	}
-
+*/
     asUModFor { |unit|
         ^UEvNetTMod(this).asUModFor(unit, delta)
     }
 
-    createDesc { |unit, tESM|
+    createDesc { |unit, tESM, slidersM|
         ^tESM >>= { |tEventSource|
             var tSignal = tEventSource.hold(0.0);
-            descFunc.(tSignal)
-            >>= this.addReactimatesFunc(unit, tEventSource)
+			slidersM.sequence(EventNetwork) >>= { |sliderSigs|
+				descFunc.(*([tSignal]++sliderSigs) )
+				>>= this.addReactimatesFunc(unit, tEventSource)
+			}
         }
     }
 
@@ -208,7 +283,7 @@ UEvNetTModDef : UEvNetModDef {
     }
 
     storeArgs {
-        ^[descFunc, delta]
+        ^[name, descFunc, delta]  ++ if(sliderSpecs.empty){}{[sliderSpecs]}
     }
 }
 
@@ -256,19 +331,23 @@ Allow using an imperative interface to the EventNetwork monad.
 */
 UENModDef : UEvNetModDef {
 
-	 createDesc { |unit|
-		^ENDef.evaluate( descFunc ) >>= this.addReactimatesFunc(unit)
+	createDesc { |unit, slidersM|
+		^slidersM.sequence(EventNetwork) >>= { |sliderSigs|
+			ENDef.evaluate( descFunc, sliderSigs ) >>= this.addReactimatesFunc(unit)
+		}
     }
 
 }
 
 UENTModDef : UEvNetTModDef {
 
-    createDesc { |unit, tESM|
+	createDesc { |unit, tESM, slidersM|
         ^tESM >>= { |tEventSource|
             var tSignal = tEventSource.hold(0.0);
-			ENDef.evaluate( descFunc, [tSignal] )
-            >>= this.addReactimatesFunc(unit, tEventSource)
+			slidersM.sequence(EventNetwork) >>= { |sliderSigs|
+				ENDef.evaluate( descFunc, [tSignal]++sliderSigs)
+				>>= this.addReactimatesFunc(unit, tEventSource)
+			}
         }
     }
 }
