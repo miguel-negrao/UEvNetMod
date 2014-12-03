@@ -1,8 +1,10 @@
 UEvNetMod {
+	classvar <>globalkeySignalDict;
     var <defName;
 	//private
 	var <def;
     var <eventNetwork;
+	var <>keySignalDict;
 
     *new { |defName|
 		var def = UEvNetModDef.all[defName];
@@ -24,6 +26,7 @@ UEvNetMod {
     asUModFor { |unit|
         eventNetwork = EventNetwork( def.createDesc(unit) );
         eventNetwork.start;
+		keySignalDict = UEvNetMod.globalkeySignalDict;
     }
 
 	viewNumLines{ ^0 }
@@ -65,6 +68,8 @@ UEvNetModDef {
     addReactimatesFunc { |unit|
         ^{ |dict|
 			Object.checkArgs(UEvNetModDef, "addReactimatesFunc - anonymous function", [dict], [Dictionary]);
+			//unpure naughtiness, might be usefull later
+			UEvNetMod.globalkeySignalDict = dict;
             if( dict.isEmpty ) {
                 EventNetwork.returnUnit
             } {
@@ -105,6 +110,7 @@ UEvNetTMod : UEvNetMod {
         tES = tESM.a;
         eventNetwork = EventNetwork( def.createDesc(unit, tESM) );
         eventNetwork.start;
+		keySignalDict = UEvNetMod.globalkeySignalDict;
     }
 
     start { |unit, startPos|
@@ -186,7 +192,8 @@ UEvNetTModDef : UEvNetModDef {
 
     addReactimatesFunc { |unit, tEventSource|
         ^{ |dict|
-            if( dict.isEmpty ) {
+			UEvNetMod.globalkeySignalDict = dict;
+			if( dict.isEmpty ) {
                 EventNetwork.returnUnit
             } {
                 dict.collect{ |uarg, key|
