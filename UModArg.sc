@@ -4,6 +4,10 @@ UModArg {
     printOn { arg stream;
 		stream << this.class.name << "( " << signal  << " )"
 	}
+
+	collect { |f|
+		^this.class.new( f.(signal) )
+	}
 }
 
 UArg : UModArg {
