@@ -184,6 +184,7 @@ UEvNetModDef {
 	//public
 	var <name, <descFunc;
 	var <sliderSpecs;
+	var <>category;
 
 	*new { |name, descFunc, sliderSpecs=#[]|
 		var check1 = if(sliderSpecs.size.odd){ Error("ImmDef - sliderSpecs: array size must be even").throw };
@@ -196,6 +197,7 @@ UEvNetModDef {
 		name = aname;
 		descFunc = adescFunc;
 		sliderSpecs = asliderSpecs.clump(2).collect{ |xs| [xs[0].asSymbol, xs[1].asControlSpec] }.flatten;
+		category = \default;
 	}
 
 	addToAll {
